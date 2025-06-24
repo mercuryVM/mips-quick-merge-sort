@@ -11,7 +11,8 @@ void printarVetor(float *vetor, int tamanho) {
 float* lerVetorDeArquivo(FILE* arquivo, int *tamanho) {
     // Tamanho é o número de \n no arquivo, temos que  contar quantos números existem
     int tam = 0;
-    float numero;
+    float numero = 0;
+
     // Primeiro, contamos quantos números existem no arquivo, percorrendo caracter por caractere e usando fgetc
     char c;
     while((c = fgetc(arquivo)) != EOF) {
@@ -31,19 +32,23 @@ float* lerVetorDeArquivo(FILE* arquivo, int *tamanho) {
 
     // Lemos os números do arquivo e os armazenamos no vetor manualmente caracter por caracter para aprendermos
     int i = 0;
+    int nInd = 0;
     while ((c = fgetc(arquivo)) != EOF) {
         if (c == '\n') {
             // Quando encontramos um \n, significa que lemos um número completo
             // Convertendo o número lido para float e armazenando no vetor
             vetor[i] = numero;
             i++;
+            nInd = 0;
             numero = 0; // Reseta o número para o próximo
         } else if (c >= '0' && c <= '9') {
             // Se o caracter é um dígito, adicionamos ao número
             numero = numero * 10 + (c - '0');
-        } else if (c == '-' && i == 0) {
+            nInd++;
+        } else if (c == '-' && nInd == 0) {
             // Se encontramos um '-', significa que o número é negativo
             numero = -numero; // Inverte o sinal do número
+            nInd++;
         }  else if (c == '.') {
             // Se encontramos um '.', significa que o número é decimal
             // Precisamos ler os dígitos após o ponto para formar o número decimal
@@ -53,14 +58,21 @@ float* lerVetorDeArquivo(FILE* arquivo, int *tamanho) {
                 if (d >= '0' && d <= '9') {
                     numero += (d - '0') * decimalPlace;
                     decimalPlace *= 0.1; // Move para a próxima casa decimal
+                    nInd++;
                 }
             }
             // Se encontramos um \n, significa que terminamos de ler o número
             vetor[i] = numero;
             i++;
             numero = 0; // Reseta o número para o próximo
+            nInd = 0;
         }
     }
+
+    // Se deu End of File, jogar o último número para a última posição já que não há nada a ser feito
+    vetor[i] = numero;
+    tam++;
+    numero = 0;
 
     *tamanho = tam; // Armazena o tamanho do vetor
 
@@ -76,12 +88,59 @@ float* insertionSort(int tam, float *vetor) {
     // Insertion Sort: percorre o vetor e insere cada elemento na posição correta
     // em relação aos elementos já ordenados à esquerda
 
+    for (int i = 1; i < tam; ++i) {
+        float key = vetor[i];
+        int j = i - 1;
+
+        /* Move elements of arr[0..i-1], that are
+           greater than key, to one position ahead
+           of their current position */
+        while (j >= 0 && vetor[j] > key) {
+            vetor[j + 1] = vetor[j];
+            j = j - 1;
+        }
+        vetor[j + 1] = key;
+    }
+
     return vetor;
 }
 
-float* quickSort(int tam, float *vetor) {
+void swap(float* a, float* b) {
+    float temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+float partition(float arr[], int low, int high) {
+    // Initialize pivot to be the first element
+    float p = arr[low];
+    int i = low;
+    int j = high;
+
+    while (i < j) {
+
+        // Find the first element greater than
+        // the pivot (from starting)
+        while (arr[i] <= p && i <= high - 1) {
+            i++;
+        }
+
+        // Find the first element smaller than
+        // the pivot (from last)
+        while (arr[j] > p && j >= low + 1) {
+            j--;
+        }
+        if (i < j) {
+            swap(&arr[i], &arr[j]);
+        }
+    }
+    swap(&arr[low], &arr[j]);
+    return j;
+}
+
+float* quickSort(float *vetor, int low, int high) {
     // Se o tamanho do vetor for menor que 2, não há nada a ordenar
-    if(tam < 2) {
+    if(low >= high) {
         return vetor;
     }
 
@@ -89,12 +148,18 @@ float* quickSort(int tam, float *vetor) {
     // um com elementos menores que o pivô e outro com elementos maiores,
     // e então ordena recursivamente os sub-vetores
 
+    int pi = partition(vetor, low, high);
+
+    quickSort(vetor, low, pi - 1);
+    quickSort(vetor, pi + 1, high);
+
     return vetor;
 }
 
 float* ordena(int tam, int tipo, float *vetor) {
     float* ordenado = (float*)malloc(tam * sizeof(float));
     if (ordenado == NULL) {
+        printf("Erro");
         return NULL; // Erro ao alocar memória
     }
 
@@ -105,7 +170,7 @@ float* ordena(int tam, int tipo, float *vetor) {
     if (tipo == 1) {
         insertionSort(tam, ordenado);
     } else if(tipo == 2) {
-        quickSort(tam, ordenado);
+        quickSort(ordenado, 0, tam);
     }
 
     return ordenado;
@@ -128,9 +193,9 @@ int main() {
         return 1;
     }
 
-    // Imprime o vetor lido do arquivo
-    printf("Vetor lido do arquivo:\n");
-    printarVetor(vetor, tamanho); // Passa o tamanho do vetor
+    float* ordenado = ordena(tamanho, 1, vetor);
+
+    printarVetor(ordenado, tamanho); // Passa o tamanho do vetor
 
     return 0;
 }
