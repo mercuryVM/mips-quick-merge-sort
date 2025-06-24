@@ -9,18 +9,22 @@
 	um: .float 1.0
 	deuBom: .asciiz "ola deu bom"
 	menosUm: .float -1.0
+	algoritmoOrdenacao: .word 1 #1 para insertion, 2 para quick sort
 
 .text
 .globl main
 main:
+	li $s2, 0 # quantos newlines tem o arquivo
+
 	# Abrir o arquivo
 	jal abrirArquivo
 	
+	# Ler buffer de linhas para descobrir quantas linhas tem o arquivo (pressupõe-se que cada número é uma linha)
 	jal lerBufferNL
 
 calcularVetor:
 	# s2, número de quebra de linhas, logo, número de números
-	addi $s2 $s2, 1
+	addi $s2, $s2, 1
 	
 	# t1, quantos bytes vamos alocar (float 32 bits, 4 bytes) (tamanho = 4 bytes * s2)
 	mul $t1, $s2, 4
@@ -44,8 +48,171 @@ calcularVetor:
 	j lerBufferNumeros
 	
 ordenacao:
+	# Guarda nosso algoritmo de ordenação
+	la $t0, algoritmoOrdenacao
+	lw $t1, 0($t0)
+	
+	beq $t1, 1, insertionSort
+	beq $t1, 2, quickSort
 	
 	j fecharPrograma
+	
+printarVetor:
+	li $t2, 0 # iterator i
+	
+	test_for_print:
+		blt $t2, $s2, for_print
+		j failed_for_print
+		
+	for_print:
+		#offset: $t2
+		mul $t3, $t2, 4
+		#aqui t2 vira endereço base (s1 + offset)
+		add $t3, $s1, $t3
+		
+		#key ($f12)
+		l.s $f12, 0($t3)   
+		
+		li $v0, 2
+		syscall
+		jal breakLine
+		
+		add $t2, $t2, 1
+		
+		j test_for_print
+	
+	failed_for_print:
+		j fecharPrograma
+		
+breakLine:
+	 li $v0, 4          # syscall 4 = print string
+    	la $a0, newLine    # carrega o endereço da string "\n"
+    	syscall
+    	jr $ra
+
+fimOrdena:
+	j printarVetor
+			
+insertionSort:
+	blt $s2, 2, fimOrdena
+	
+	li $t2, 1 # iterator i
+	
+	j test_for
+	
+	test_for:
+		blt $t2, $s2, for
+		j failed_for
+		
+	for:	
+		#offset: $t2
+		mul $t3, $t2, 4
+		#aqui t2 vira endereço base (s1 + offset)
+		#t3 endereço de cada
+		add $t3, $s1, $t3
+		
+		# vetor[i]
+		l.s $f0, 0($t3)   
+
+		# j é t4, i - 1
+		sub $t4, $t2, 1 # j = i - 1
+		
+		j test_while
+		
+		test_while:
+			blt $t4, 0, end_while
+			#endereço de j
+			mul $t3, $t4, 4
+			add $t3, $s1, $t3
+			
+			# vetor[j]
+			l.s $f1, 0($t3)
+			
+			# vetor[j] <= vetor[i]
+			c.le.s $f0, $f1 
+			# se for falso, ou seja vetor[j] > vetor[i]
+			bc1f end_while
+			
+			j while
+		
+		while:	
+			mul $t7, $t4, 4
+		
+			# endereço j
+			add $t5, $t7, $s1
+			
+			# endereço j + 1
+			add $t6, $t5, 4
+			
+			#vetor[j]
+			l.s $f2, 0($t5)
+			  
+			s.s $f2, 0($t6)
+			
+			sub $t4, $t4, 1
+			
+			j test_while
+		
+		end_while:
+		
+		# j = j + 1
+		add $t4, $t4, 1
+		# offset no vetor para j + 1
+		mul $t3, $t4, 4
+		#aqui t3 vira endereço base (s1 + offset)
+		add $t3, $s1, $t3
+		
+		# salva no j+1 o key
+		s.s $f0, 0($t3)   
+		
+		add $t2, $t2, 1 #i++
+		j test_for
+	
+	failed_for:
+		j fimOrdena
+		
+iniciaQuickSort:
+	li $t0 0 # 0
+	li $t1 $s2 # tamanho vetor
+	j quickSort
+	
+quickSort:
+	# Basicamente precisamos criar uma pilha de execução dos QuickSorts.
+	# Nessa pilha iremos guardar cada chamada de execução do Quicksort, incluindo informações como (low, high e PC)
+	# A ideia é que a cada "chamada recursiva" os valores atuais do Quicksort e a instrução chamada posteriormente sejam empilhados para a execução da recursão executada
+	# E ao término dessa recursão, a pilha seja desempilhada assim retornando a chamada anterior junto com a instrução posterior a recursão para prosseguir com o código
+	# Devemos alocar uma pilha e tratar as chamadas recursivas que usarão essa pilha
+	
+	#$t0: low, $t1: high
+	
+	partition:
+		#offset: $t2
+		mul $t2, $t0, 4
+		
+		#aqui t2 vira endereço base (s1 + offset)
+		add $t2, $s1, $t2
+		
+		# vetor[low]
+		l.s $f0, 0($t2)
+		
+		# i = low
+		move $t3, $t0   
+
+		# j = high
+		move $t4, $t1
+		
+		j test_while_partition
+		
+		test_while_partition:
+			blt $t3, $t4, while_partition
+			j end_while_partition
+			
+		while_partition:
+			
+		
+		end_while_partition:
+			
+	j fimOrdena
 	
 interpretarNumero:
 	#f0, 10
@@ -221,7 +388,7 @@ contarNL:
 	j proximoNL
 	
 incrementaNL:
-	addi $s2 $s2, 1
+	addi $s2, $s2, 1
 	j proximoNL
 	
 proximoNL:
@@ -279,7 +446,6 @@ abrirArquivo:
 	bltz $s0, erroAbrirArquivo
 	
 	# s0 agora contém o FileDescriptor
-	li $s2, 0 # quantos newlines tem o arquivo
 	
 	# Voltar a função main após abrir
 	jr $ra
