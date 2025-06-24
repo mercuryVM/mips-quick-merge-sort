@@ -1,5 +1,5 @@
 .data
-	localArquivo: .asciiz "C:/Users/offic/Downloads/numeros.txt"
+	localArquivo: .asciiz "C:/Users/offic/Downloads/clodoaldo/EP2Clodoaldo/numeros.txt"
 	conteudoArquivo: .space 1024
 	erroArquivoMessagem: .asciiz "Erro ao abrir arquivo"
 	newLine: .asciiz "\n"
@@ -9,7 +9,7 @@
 	um: .float 1.0
 	deuBom: .asciiz "ola deu bom"
 	menosUm: .float -1.0
-	algoritmoOrdenacao: .word 1 #1 para insertion, 2 para quick sort
+	algoritmoOrdenacao: .word 2 #1 para insertion, 2 para quick sort
 
 .text
 .globl main
@@ -174,6 +174,10 @@ insertionSort:
 iniciaQuickSort:
 	li $t0, 0 # 0
 	move $t1, $s2
+	
+	# stack size
+	li $s5, 1
+	
 	j quickSort
 	
 quickSort:
@@ -185,6 +189,10 @@ quickSort:
 	
 	#$t0: low, $t1: high
 	
+	bge $t0, $t1, quick_sort_retorno
+	
+	j partition
+	
 	partition:
 		#offset: $t2
 		mul $t2, $t0, 4
@@ -192,7 +200,7 @@ quickSort:
 		#aqui t2 vira endereço base (s1 + offset)
 		add $t2, $s1, $t2
 		
-		# vetor[low]
+		# vetor[low] (p)
 		l.s $f0, 0($t2)
 		
 		# i = low
@@ -208,11 +216,202 @@ quickSort:
 			j end_while_partition
 			
 		while_partition:
+			j test_while_first
 			
+			test_while_first:
+				# high - 1
+				sub $t5, $t1, 1
+			
+				#offset i no array
+				mul $t2, $t3, 4
+			
+				# endereço arr[i]
+				add $t2, $s1, $t2
+			
+				# vetor [i]
+				l.s $f1, 0($t2)
+			
+				# vetor[i] <= p
+				c.le.s $f1, $f0 
+				# se for verdadeiro, go to end_while_first
+				bc1f end_while_first
+				
+				# i para float
+				mtc1 $t3, $f2
+				cvt.s.w $f2, $f2
+				
+				# high - 1 para float
+				mtc1 $t5, $f3
+				cvt.s.w $f3, $f3
+				
+				# i <= high - 1
+				c.le.s $f2, $f3
+				bc1f end_while_first
+				
+				j while_first
+				
+			while_first:
+				#i++
+				addi $t3, $t3, 1
+				j test_while_first
+			
+			end_while_first:
+			
+			test_while_second:
+				# low + 1
+				add $t5, $t0, 1
+			
+				#offset j no array
+				mul $t2, $t4, 4
+			
+				# endereço arr[j]
+				add $t2, $s1, $t2
+			
+				# vetor [j]
+				l.s $f1, 0($t2)
+				
+				# vetor[j] > p
+				c.le.s $f1, $f0 
+				# se for verdadeiro, go to end_while_first
+				bc1t end_while_second
+				
+				# j para float
+				mtc1 $t4, $f2
+				cvt.s.w $f2, $f2
+				
+				# low + 1 para float
+				mtc1 $t5, $f3
+				cvt.s.w $f3, $f3
+				
+				# j >= low + 1
+				c.lt.s $f2, $f3
+				bc1t end_while_second
+				
+				j while_second
+			
+			while_second:
+				# j--
+				sub $t4, $t4, 1
+				j test_while_second
+			
+			end_while_second:	
+			
+			# swap
+			
+			bge $t3, $t4, test_while_partition
+			
+			#offset i no array
+			mul $t2, $t3, 4
+			
+			# endereço arr[i]
+			add $t2, $s1, $t2
+			
+			# vetor [i]
+			l.s $f1, 0($t2)
+			
+			#offset j no array
+			mul $t5, $t4, 4
+			
+			# endereço arr[j]
+			add $t5, $s1, $t5
+			
+			# vetor [j]
+			l.s $f2, 0($t5)
+			
+			# swap
+			s.s $f1, 0($t5)
+			s.s $f2, 0($t2)
+			
+			j test_while_partition
 		
 		end_while_partition:
+			#swap
 			
-	j fimOrdena
+			#offset low no array
+			mul $t2, $t0, 4
+			
+			# endereço arr[low]
+			add $t2, $s1, $t2
+			
+			# vetor [low]
+			l.s $f1, 0($t2)
+			
+			#offset j no array
+			mul $t5, $t4, 4
+			
+			# endereço arr[j]
+			add $t5, $s1, $t5
+			
+			# vetor [j]
+			l.s $f2, 0($t5)
+			
+			# swap
+			s.s $f1, 0($t5)
+			s.s $f2, 0($t2)
+			
+			#s4 = retorno de j atual no quicksort
+			move $s4, $t4
+			
+			j end_partition
+			
+	end_partition:
+		j chamar_quick_sort
+		
+	chamar_quick_sort:
+		# Chama quicksort para low = low e high = pi ($s4) - 1
+		
+		# Empilha o low, high e endereço
+		sub $sp, $sp, 16
+		sw $s4, 12($sp)
+		sw $t0, 8($sp)
+		sw $t1, 4($sp)
+		la $t2 chamar_quick_sort2
+		sw $t2, 0($sp)
+		
+		add $s5, $s5, 1
+		
+		# Atualiza os valores locais
+		add $t1, $s4, -1 # Atualiza o high (pi - 1)
+		
+		j quickSort
+		
+	
+	chamar_quick_sort2:
+		# Chama quicksort para low = pi ($s4) + 1 e high = high
+		
+		# Empilha o low, high e endereço
+		sub $sp, $sp, 16
+		sw $s4, 12($sp)
+		sw $t0, 8($sp)
+		sw $t1, 4($sp)
+		la $t2 quick_sort_retorno
+		sw $t2, 0($sp)
+		
+		add $s5, $s5, 1
+		
+		# Atualiza os valores locais
+		add $t0, $s4, 1 # Atualiza o low (pi + 1)
+		
+		j quickSort
+	
+	quick_sort_retorno:
+		# se a pilha está vazia, fim
+		sub $s5, $s5, 1
+		
+		blez $s5, fimOrdena
+		
+		# retorno
+		lw $t7, 0($sp)
+		# high
+		lw $t1, 4($sp)
+		# low
+		lw $t0, 8($sp)
+		# pivo
+		lw $s4, 12($sp)
+		
+		add $sp, $sp, 16
+		 
+		 jr $t7 
 	
 interpretarNumero:
 	#f0, 10
