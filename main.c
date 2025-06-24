@@ -4,13 +4,13 @@
 void printarVetor(float *vetor, int tamanho) {
     // Imprime o vetor na tela
     for (int i = 0; i < tamanho; i++) {
-        printf("%f\n", vetor[i]);
+        printf("%f.10\n", vetor[i]);
     }
 }
 
 float* lerVetorDeArquivo(FILE* arquivo, int *tamanho) {
     // Tamanho é o número de \n no arquivo, temos que  contar quantos números existem
-    int tam = 0;
+    int tam = 1;
     float numero = 0;
 
     // Primeiro, contamos quantos números existem no arquivo, percorrendo caracter por caractere e usando fgetc
@@ -71,7 +71,6 @@ float* lerVetorDeArquivo(FILE* arquivo, int *tamanho) {
 
     // Se deu End of File, jogar o último número para a última posição já que não há nada a ser feito
     vetor[i] = numero;
-    tam++;
     numero = 0;
 
     *tamanho = tam; // Armazena o tamanho do vetor
