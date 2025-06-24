@@ -53,7 +53,7 @@ ordenacao:
 	lw $t1, 0($t0)
 	
 	beq $t1, 1, insertionSort
-	beq $t1, 2, quickSort
+	beq $t1, 2, iniciaQuickSort
 	
 	j fecharPrograma
 	
@@ -172,8 +172,8 @@ insertionSort:
 		j fimOrdena
 		
 iniciaQuickSort:
-	li $t0 0 # 0
-	li $t1 $s2 # tamanho vetor
+	li $t0, 0 # 0
+	move $t1, $s2
 	j quickSort
 	
 quickSort:
