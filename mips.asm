@@ -1,5 +1,5 @@
 .data
-	localArquivo: .asciiz "C:/Users/offic/Downloads/clodoaldo/EP2Clodoaldo/numeros.txt"
+	localArquivo: .asciiz "D:/OAC/EP2Clodoaldo/numeros.txt"
 	conteudoArquivo: .space 1024
 	erroArquivoMessagem: .asciiz "Erro ao abrir arquivo"
 	newLine: .asciiz "\n"
@@ -7,9 +7,18 @@
 	dez: .float 10.0
 	zero: .float 0.0
 	um: .float 1.0
-	deuBom: .asciiz "ola deu bom"
+	dois: .float 2.0
+	tres: .float 3.0
+	quatro: .float 4.0
+	cinco: .float 5.0
+	seis: .float 6.0
+	sete: .float 7.0
+	oito: .float 8.0
+	nove: .float 9.0
 	menosUm: .float -1.0
+	precisao: .float 100000.0
 	algoritmoOrdenacao: .word 2 #1 para insertion, 2 para quick sort
+	float_buffer: .space 1024
 
 .text
 .globl main
@@ -58,34 +67,200 @@ ordenacao:
 	j fecharPrograma
 	
 printarVetor:
-	li $t2, 0 # iterator i
+    	li $t2, 0  # iterator i
+    	li $s3, 0 # bytes a serem escritos
+    	li $t3, 0 # caracter do numero atual
+    	li $t5, 0 # resto da divisão atual
+    	li $t7, 10 # dez
+    
+    	jal fecharArquivo
+    
+    	# Configurar abertura de arquivo
+	li $v0, 13
+	la $a0, localArquivo
+	# Apenas escrita
+	li $a1, 1
+	li $a2, 8
+	syscall
+	move $s0, $v0
 	
-	test_for_print:
-		blt $t2, $s2, for_print
-		j failed_for_print
-		
-	for_print:
-		#offset: $t2
-		mul $t3, $t2, 4
-		#aqui t2 vira endereço base (s1 + offset)
-		add $t3, $s1, $t3
-		
-		#key ($f12)
-		l.s $f12, 0($t3)   
-		
-		li $v0, 2
-		syscall
-		jal breakLine
-		
-		add $t2, $t2, 1
-		
-		j test_for_print
+	j test_for_print
+
+test_for_print:
+    	blt $t2, $s2, for_print
+    	j failed_for_print
+    
+for_print:
+    	# Calcula o offset: t3 = s1 + t2 * 4
+    	mul $t4, $t2, 4
+    	add $t4, $s1, $t4
+
+    	# Carrega o float vetor[i] em f12
+    	l.s $f12, 0($t4)
+    
+    	jal start_print_number
+    
+flush_print:
+	la   $t4, float_buffer   # base do buffer
+    	add  $t4, $t4, $s3       # offset = s3
+    	li   $t3, 10             # ASCII LF
+    	sb   $t3, 0($t4)
+    	addi $s3, $s3, 1         # conta +1 byte
+
+	# Escreve no arquivo
+    	li $v0, 15        # syscall write
+    	move $a0, $s0     # descritor do arquivo (já aberto em $s0)
+    	la $a1, float_buffer
+    	move $a2, $s3
+    	syscall
+    	
+    	move $s3, $zero
+    	add $t2, $t2, 1
+    	
+    	j test_for_print
+    	
+start_print_number:
+	# para printarmos o número no console precisamos dividir a parte inteira do ponto flutuante por 10 e pegar o resto.
+	# não existe como escrever float no assembly, então precisamos encontrar os caracteres específicos para escrevermos
+	# para isso, vou truncar o float usando a pseudoinstrução trunc.w.s e copiar pro registrador com mfc1
 	
-	failed_for_print:
-		j fecharPrograma
+	li $s6, 0 # printando decimal
+	
+	start_print_decimal:
+	
+	# obtém a parte inteira do float q estamos printando
+	trunc.w.s $f0, $f12
+	# move pro registrador
+	mfc1      $t6, $f0 # parte inteira
+	li $s7, 0 # quantos numeros empilhados
+	
+	l.s $f23, zero
+	
+		# verificação negativo
+		c.lt.s $f12, $f23
+		bc1t int_print_number_neg_number
+	
+	j int_print_number
+	
+	# se o número for negativo, multiplica por -1 e adiciona o - no buffer
+	int_print_number_neg_number:
+		mul $t6, $t6, -1
+		# se estamos printando decimal, n precisa de sinal no buffer. apenas inverta o numero
+		beq $s6, 1, int_print_number
+	
+		la $t4, float_buffer
+		add $t4, $t4, $s3
+		li $t3, 45
+		sb $t3, 0($t4)   
+		
+		add $s3, $s3, 1 # mais um byte a escrever
+		
+		j int_print_number
+	
+	int_print_number:
+
+		
+		# divisão por 10
+		div $t6, $t7
+	
+		mfhi      $t4 # resto da divisao
+		
+		# empilha os restos
+		sub $sp, $sp, 4
+		sw $t4, 0($sp)
+		add $s7, $s7, 1
+		
+		mflo $t6 # resultado da divisão
+		
+		# se o valor da divisão <= 0, fim
+		blez $t6, end_int_print_number
+		
+		# continua iterando até acabar
+		j int_print_number
+		
+	decimal_start:
+		# adicionar ponto no buffer
+		la $t4, float_buffer
+		add $t4, $t4, $s3
+		li $t3, 46
+		sb $t3, 0($t4)   
+		
+		add $s3, $s3, 1 # mais um byte a escrever
+		
+		# foi necessario essas duas pseudoinstrucoes para termos os valores corretamente representados em float, mas truncado
+		# tentei sem o cvt.s.w mas aí ficou NaN
+		trunc.w.s $f0, $f12
+		cvt.s.w $f0, $f0
+		
+		l.s $f2, zero
+		
+		c.lt.s $f0, $f2
+		bc1t absolute
+			
+		decimal_start_continue_next:
+	
+		# precisamos pegar o valor que estamos pritando - parte inteira para obtermos o decimal
+		# f0 contém a truncada e f12 a f12 o valor que estamos printando
+		sub.s $f1, $f12, $f0 # ex.: 3,12 - 3 = 0,12
+		
+		# flag printando decimal para reaproveitar mesmo código
+		
+		li $s6, 1
+		
+		l.s $f2, precisao
+		
+		# precisão, 5 casas
+		mul.s $f12, $f1, $f2
+		
+		j start_print_decimal	
+		
+			
+		absolute:
+			l.s $f2, menosUm
+			mul.s $f0, $f0, $f2
+			mul.s $f12, $f12, $f2
+			j decimal_start_continue_next
+		
+	check_decimal_start:
+		#s6: printando decimal
+		#s7: quantos na pilha
+		
+		li $t4, 0
+		
+		bgt $s7, $t4, goBackDecimalStart
+		beq $s6, $t4, decimal_start
+		j flush_print
+		
+		goBackDecimalStart:
+			jr $ra
+		
+	end_int_print_number:
+		jal check_decimal_start
+		
+		lw $t4, 0($sp) # resto desempilhado
+		sub $s7, $s7, 1 # desempilha
+		add $sp, $sp, 4
+		add $t4, $t4, 48 # converte char
+
+		
+		# salva no buffer esse char
+		la $t6, float_buffer
+		add $t6, $t6, $s3
+		sb $t4, 0($t6)   
+		
+		add $s3, $s3, 1 # mais um byte a escrever
+		
+		# continua escrevendo os chars
+		
+		j end_int_print_number
+	
+
+failed_for_print:
+	jal fecharArquivo
+    	j fecharPrograma
 		
 breakLine:
-	 li $v0, 4          # syscall 4 = print string
+	li $v0, 4          # syscall 4 = print string
     	la $a0, newLine    # carrega o endereço da string "\n"
     	syscall
     	jr $ra
@@ -173,7 +348,7 @@ insertionSort:
 		
 iniciaQuickSort:
 	li $t0, 0 # 0
-	move $t1, $s2
+	sub $t1, $s2, 1
 	
 	# stack size
 	li $s5, 1
@@ -236,17 +411,8 @@ quickSort:
 				# se for verdadeiro, go to end_while_first
 				bc1f end_while_first
 				
-				# i para float
-				mtc1 $t3, $f2
-				cvt.s.w $f2, $f2
-				
-				# high - 1 para float
-				mtc1 $t5, $f3
-				cvt.s.w $f3, $f3
-				
 				# i <= high - 1
-				c.le.s $f2, $f3
-				bc1f end_while_first
+				bgt $t3, $t5, end_while_first
 				
 				j while_first
 				
@@ -256,6 +422,7 @@ quickSort:
 				j test_while_first
 			
 			end_while_first:
+				j test_while_second
 			
 			test_while_second:
 				# low + 1
@@ -275,17 +442,8 @@ quickSort:
 				# se for verdadeiro, go to end_while_first
 				bc1t end_while_second
 				
-				# j para float
-				mtc1 $t4, $f2
-				cvt.s.w $f2, $f2
-				
-				# low + 1 para float
-				mtc1 $t5, $f3
-				cvt.s.w $f3, $f3
-				
 				# j >= low + 1
-				c.lt.s $f2, $f3
-				bc1t end_while_second
+				blt $t4, $t5, end_while_second
 				
 				j while_second
 			
@@ -430,6 +588,7 @@ interpretarNumero:
 	l.s $f5, um
 	
 	# Se por acaso nosso buffer parar de ler no meio do número, ao obter o próximo buffer, já começar interpretando os caracteres e não um novo numero
+	# Pra isso, durante a leitura iremos guardar no s7 o endereço da instrução q ele deve retomar ao acabar os bytes de leitura
 	la $s7, interpretarNumeroCaracter
 	
 	j interpretarNumeroCaracter
@@ -451,9 +610,54 @@ interpretarNumeroCaracter:
 	# Subtrai 0 ASCII (48) para obter os números "normalizados"
 	sub $t4, $t3, 48
 	
-	# Carrega o t4 (ASCII convertido número normalizado) para float
-	mtc1 $t4, $f2
-	cvt.s.w $f2, $f2
+	# $f2 deve conter o ascii em float
+	
+	beq $t4, 0, nZero
+	beq $t4, 1, nUm
+	beq $t4, 2, nDois
+	beq $t4, 3, nTres
+	beq $t4, 4, nQuatro
+	beq $t4, 5, nCinco
+	beq $t4, 6, nSeis
+	beq $t4, 7, nSete
+	beq $t4, 8, nOito
+	beq $t4, 9, nNove
+	j nInvalido
+	
+	nZero:
+		l.s $f2, zero
+		j nCalcula
+	nUm:
+		l.s $f2, um
+		j nCalcula
+	nDois:
+		l.s $f2, dois
+		j nCalcula
+	nTres:
+		l.s $f2, tres
+		j nCalcula
+	nQuatro:
+		l.s $f2, quatro
+		j nCalcula
+	nCinco:
+		l.s $f2, cinco
+		j nCalcula
+	nSeis:
+		l.s $f2, seis
+		j nCalcula
+	nSete:
+		l.s $f2, sete
+		j nCalcula
+	nOito:
+		l.s $f2, oito
+		j nCalcula
+	nNove:
+		l.s $f2, nove
+		j nCalcula
+	nInvalido:
+		j nZero
+	
+	nCalcula:
 	
 	# Número = Número * 10 + ASCII
 	mul.s $f1, $f1, $f0
@@ -489,9 +693,54 @@ interpretarDecimal:
 	# Subtrai 0 ASCII (48) para obter os números "normalizados"
 	sub $t4, $t3, 48
 	
-	# Carrega o t4 (ASCII convertido número normalizado) para float
-	mtc1 $t4, $f2
-	cvt.s.w $f2, $f2
+	# $f2 deve conter o ascii em float
+	
+	beq $t4, 0, nDZero
+	beq $t4, 1, nDUm
+	beq $t4, 2, nDDois
+	beq $t4, 3, nDTres
+	beq $t4, 4, nDQuatro
+	beq $t4, 5, nDCinco
+	beq $t4, 6, nDSeis
+	beq $t4, 7, nDSete
+	beq $t4, 8, nDOito
+	beq $t4, 9, nDNove
+	j nDInvalido
+	
+	nDZero:
+		l.s $f2, zero
+		j nDCalcula
+	nDUm:
+		l.s $f2, um
+		j nDCalcula
+	nDDois:
+		l.s $f2, dois
+		j nDCalcula
+	nDTres:
+		l.s $f2, tres
+		j nDCalcula
+	nDQuatro:
+		l.s $f2, quatro
+		j nDCalcula
+	nDCinco:
+		l.s $f2, cinco
+		j nDCalcula
+	nDSeis:
+		l.s $f2, seis
+		j nDCalcula
+	nDSete:
+		l.s $f2, sete
+		j nDCalcula
+	nDOito:
+		l.s $f2, oito
+		j nDCalcula
+	nDNove:
+		l.s $f2, nove
+		j nDCalcula
+	nDInvalido:
+		j nDZero
+	
+	nDCalcula:
 	
 	# ASCII * decimal place
 	mul.s $f4, $f3, $f2
